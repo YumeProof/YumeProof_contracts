@@ -83,35 +83,6 @@ module yumeproof_contracts::ClosedLoopToken {
         transfer::public_transfer(payment, ctx.sender());
     }
     
-    /// Purchase credits with bulk discount
-    public fun purchase_credits_bulk(
-        treasury_cap: &mut TreasuryCap<YUMEPROOF>,
-        payment: Coin,
-        ctx: &mut TxContext
-    ) {
-        let payment_amount = coin::value(&payment);
-        
-        // Apply bulk discounts
-        let credits = if (payment_amount >= PRICE_PER_CREDIT * 100) {
-            // 20% bonus for 100+ credits
-            (payment_amount / PRICE_PER_CREDIT) * 120 / 100
-        } else if (payment_amount >= PRICE_PER_CREDIT * 50) {
-            // 10% bonus for 50+ credits
-            (payment_amount / PRICE_PER_CREDIT) * 110 / 100
-        } else {
-            payment_amount / PRICE_PER_CREDIT
-        };
-        
-        assert!(credits >= MIN_PURCHASE, EIncorrectPayment);
-        
-        // Mint credits with bonus
-        let token = token::mint(treasury_cap, credits, ctx);
-        let req = token.transfer(tx_context::sender(ctx), ctx);
-        token::confirm_with_treasury_cap(treasury_cap, req, ctx);
-        
-        // Transfer IOTA payment to treasury
-        transfer::public_transfer(payment, ctx.sender());
-    }
     
     /// Get credit price in IOTA
     public fun get_credit_price(): u64 {
