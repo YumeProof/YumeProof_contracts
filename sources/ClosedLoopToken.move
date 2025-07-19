@@ -125,7 +125,7 @@ module yumeproof_contracts::ClosedLoopToken {
         transfer::public_transfer(treasury_cap, ctx.sender());
     }
 
-    /// Purchase notarization credits with IOTA (Step 7: Buy Credits)
+    /// Purchase notarization credits with IOTA (Step 7: Buy Credits) - Sponsored
     public fun purchase_credits_with_iota(
         treasury_cap: &mut TreasuryCap<YUMEPROOF>,
         payment: Coin<YUMEPROOF>,
@@ -147,9 +147,11 @@ module yumeproof_contracts::ClosedLoopToken {
 
         // Transfer IOTA payment to treasury
         transfer::public_transfer(payment, ctx.sender());
+
+        // Gas station automatically sponsors this transaction
     }
 
-    /// Claim free daily credits (Step 7: Free Credits Max 2 Per Day)
+    /// Claim free daily credits (Step 7: Free Credits Max 2 Per Day) - Sponsored
     public fun claim_free_daily_credits(
         treasury_cap: &mut TreasuryCap<YUMEPROOF>,
         user_address: address,
@@ -189,6 +191,8 @@ module yumeproof_contracts::ClosedLoopToken {
         } else {
             table::add(&mut daily_tracker.daily_claims, user_address, 1);
         };
+
+        // Gas station automatically sponsors this transaction
     }
 
     /// Get credit price in IOTA
@@ -196,7 +200,7 @@ module yumeproof_contracts::ClosedLoopToken {
         PRICE_PER_CREDIT
     }
 
-    /// Use credits for notarization with ID indexing (Step 8: Notarize Image + Step 9: Spend Token for indexing)
+    /// Use credits for notarization with ID indexing (Step 8: Notarize Image + Step 9: Spend Token for indexing) - Sponsored
     public fun use_credits_for_notarization_with_id(
         token: Token<YUMEPROOF>,
         _policy: &TokenPolicy<YUMEPROOF>,
@@ -232,6 +236,8 @@ module yumeproof_contracts::ClosedLoopToken {
         // Add notarization policy approval
         token::add_approval(NotarizationPolicy {}, &mut action_request, ctx);
 
+        // Gas station automatically sponsors this transaction
+
         (action_request, record)
     }
 
@@ -239,7 +245,7 @@ module yumeproof_contracts::ClosedLoopToken {
     public fun complete_notarization(
         notarization_record: &mut NotarizationRecord,
         status: u8, // 1: completed, 2: failed
-        ctx: &mut TxContext,
+        _ctx: &mut TxContext,
     ) {
         notarization_record.status = status;
         notarization_record.timestamp = 0; // Will be set by external timestamp
@@ -303,6 +309,11 @@ module yumeproof_contracts::ClosedLoopToken {
     /// Get gas station info
     public fun get_gas_station_info(gas_station: &GasStation): (address, bool) {
         (gas_station.sponsor_address, gas_station.is_active)
+    }
+
+    /// Check if gas station is available for sponsorship
+    public fun is_gas_station_available(gas_station: &GasStation): bool {
+        gas_station.is_active
     }
 
     #[test_only]

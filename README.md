@@ -8,7 +8,7 @@ This Move module implements a closed-loop token system for the YumeProof protoco
 - **Purpose:** Credits for notarizing images on the YumeProof protocol
 - **Purchase Mechanism:** Buy credits with IOTA or claim free daily credits (max 2 per day)
 - **Access Control:** Only allowlisted services can perform notarization actions
-- **Gas Station:** Sponsorship of on-chain transactions
+- **Gas Station:** All transactions are automatically sponsored by the IOTA Gas Station
 - **Notarization ID Indexing:** Unique ID tracking for each notarization request
 
 ## Architecture Integration
@@ -19,6 +19,14 @@ This contract handles the following steps from the architecture:
 
 Note: Steps 1-6 (device verification, credentials) are handled by external services (Google Play Integrity API, Google Confidential Computing) and are not part of this smart contract.
 
+## Gas Station Integration
+All transactions in this contract are automatically sponsored by the IOTA Gas Station at the network level:
+- **Purchase Credits**: Gas station covers transaction fees automatically
+- **Claim Free Credits**: Gas station covers transaction fees automatically
+- **Notarization**: Gas station covers transaction fees automatically
+
+The gas station sponsorship is handled by the IOTA network infrastructure, not explicitly in the contract code. Users don't need to pay gas fees for any operations.
+
 ## Function Descriptions
 
 ### `init(otw: CLOSEDLOOPTOKEN, ctx: &mut TxContext)`
@@ -26,7 +34,7 @@ Initializes the module:
 - Creates the YUME token and its metadata.
 - Sets up the token policy and allowlist for notarization services.
 - Creates a daily credit tracker for managing free credit limits.
-- Creates a gas station for transaction sponsorship.
+- Creates a gas station configuration object for tracking sponsorship settings.
 - Creates a notarization registry for ID indexing.
 - Shares the policy as a shared object.
 - Transfers admin capabilities to the protocol admin (sender).
@@ -37,6 +45,7 @@ Allows users to purchase notarization credits by paying IOTA (Step 7: Buy Credit
 - Ensures the minimum purchase amount is met.
 - Mints the corresponding number of credits.
 - Transfers credits to the buyer and the IOTA payment to the treasury.
+- **Gas station automatically sponsors the transaction fees at the network level.**
 
 ### `claim_free_daily_credits(treasury_cap: &mut TreasuryCap<YUMEPROOF>, user_address: address, daily_tracker: &mut DailyCreditTracker, clock: &Clock, ctx: &mut TxContext)`
 Allows users to claim free daily credits (Step 7: Free Credits Max 2 Per Day):
@@ -44,6 +53,7 @@ Allows users to claim free daily credits (Step 7: Free Credits Max 2 Per Day):
 - Ensures the user hasn't exceeded the daily free credit limit (max 2 per day).
 - Mints and transfers one free credit to the user.
 - Updates the daily claim tracking.
+- **Gas station automatically sponsors the transaction fees at the network level.**
 
 ### `get_credit_price(): u64`
 Returns the fixed price (in IOTA base units) for one notarization credit.
@@ -56,6 +66,7 @@ Allows users to spend credits for notarization with ID indexing (Step 8: Notariz
 - Creates a spend request for the specified number of credits.
 - Adds notarization policy approval to the request.
 - Returns both the action request and the notarization record.
+- **Gas station automatically sponsors the transaction fees at the network level.**
 
 ### `complete_notarization(notarization_record: &mut NotarizationRecord, status: u8, ctx: &mut TxContext)`
 Completes a notarization with a status update:
@@ -89,6 +100,10 @@ Updates the gas station configuration:
 Returns the current gas station configuration:
 - Returns the sponsor address and active status.
 
+### `is_gas_station_available(gas_station: &GasStation): bool`
+Checks if the gas station is available for sponsorship:
+- Returns true if the gas station is active, false otherwise.
+
 ### `test_init(ctx: &mut TxContext)`
 Test-only function to initialize the module in a test context.
 
@@ -106,7 +121,7 @@ Test-only function to initialize the module in a test context.
 - `YUMEPROOF`: The token type for notarization credits.
 - `NotarizationPolicy`: Policy struct for allowlisting notarization services.
 - `DailyCreditTracker`: Manages daily free credit claims across all users.
-- `GasStation`: Configuration for transaction sponsorship.
+- `GasStation`: Configuration for tracking gas station sponsorship settings.
 - `NotarizationRecord`: Stores individual notarization records with IDs for indexing.
 - `NotarizationRegistry`: Manages all notarization records and ID tracking.
 
@@ -115,7 +130,8 @@ Test-only function to initialize the module in a test context.
 - Credits are non-divisible (no decimals).
 - All admin capabilities are transferred to the protocol admin after initialization.
 - Daily free credit limits are enforced per user address (max 2 per day).
-- Gas station sponsorship is available for covering transaction costs.
+- **All transactions are automatically sponsored by the IOTA Gas Station at the network level.**
 - Each notarization request requires a unique ID for tracking and verification.
 - Notarization records are stored with status tracking (pending, completed, failed).
-- Device verification and credential management are handled by external services. 
+- Device verification and credential management are handled by external services.
+- Users don't need to pay gas fees for any operations. 
