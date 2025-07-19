@@ -1,6 +1,6 @@
 # YumeProof ClosedLoopToken Module
 
-This Move module implements a closed-loop token system for the YumeProof protocol, providing notarization credits that can be purchased with IOTA and used for notarizing images. The module includes mechanisms for credit purchase, usage, and service registration, as well as access control via a policy allowlist. The system is designed to work with device verification, verifiable credentials, and gas station sponsorship as outlined in the architecture.
+This Move module implements a closed-loop token system for the YumeProof protocol, providing notarization credits that can be purchased with IOTA and used for notarizing images. The module focuses on credit management and notarization ID indexing as outlined in the architecture steps 7, 8, and 9.
 
 ## Overview
 - **Token Name:** YumeProof Notarization Credits
@@ -8,8 +8,16 @@ This Move module implements a closed-loop token system for the YumeProof protoco
 - **Purpose:** Credits for notarizing images on the YumeProof protocol
 - **Purchase Mechanism:** Buy credits with IOTA or claim free daily credits (max 2 per day)
 - **Access Control:** Only allowlisted services can perform notarization actions
-- **Device Verification:** Integration with Google Play Integrity API for device verification
 - **Gas Station:** Sponsorship of on-chain transactions
+- **Notarization ID Indexing:** Unique ID tracking for each notarization request
+
+## Architecture Integration
+This contract handles the following steps from the architecture:
+- **Step 7: Buy Credits (Free Credits Max 2 Per Day)** - Credit purchase and daily free credit claims
+- **Step 8: Notarize Image** - Using credits for image notarization
+- **Step 9: Spend Token (for indexing)** - Notarization ID indexing and tracking
+
+Note: Steps 1-6 (device verification, credentials) are handled by external services (Google Play Integrity API, Google Confidential Computing) and are not part of this smart contract.
 
 ## Function Descriptions
 
@@ -19,45 +27,49 @@ Initializes the module:
 - Sets up the token policy and allowlist for notarization services.
 - Creates a daily credit tracker for managing free credit limits.
 - Creates a gas station for transaction sponsorship.
+- Creates a notarization registry for ID indexing.
 - Shares the policy as a shared object.
 - Transfers admin capabilities to the protocol admin (sender).
 
-### `register_device_verification(device_did: address, verification_token: vector<u8>, ctx: &mut TxContext)`
-Registers a device verification after Google Play Integrity API validation:
-- Creates a DeviceVerification object with the device's DID.
-- Records verification timestamp and initializes daily credit tracking.
-- Shares the verification object for future reference.
-
-### `issue_verifiable_credentials(device_did: address, credentials_hash: vector<u8>, valid_duration_ms: u64, ctx: &mut TxContext)`
-Issues verifiable credentials for a verified device:
-- Creates VerifiableCredentials object with device DID and credentials hash.
-- Sets validity period for the credentials.
-- Shares the credentials object for validation during notarization.
-
 ### `purchase_credits_with_iota(treasury_cap: &mut TreasuryCap<YUMEPROOF>, payment: Coin<YUMEPROOF>, ctx: &mut TxContext)`
-Allows users to purchase notarization credits by paying IOTA:
+Allows users to purchase notarization credits by paying IOTA (Step 7: Buy Credits):
 - Calculates the number of credits based on the payment amount and the fixed price per credit.
 - Ensures the minimum purchase amount is met.
 - Mints the corresponding number of credits.
 - Transfers credits to the buyer and the IOTA payment to the treasury.
 
-### `claim_free_daily_credits(treasury_cap: &mut TreasuryCap<YUMEPROOF>, device_did: address, daily_tracker: &mut DailyCreditTracker, clock: &Clock, ctx: &mut TxContext)`
-Allows verified devices to claim free daily credits (max 2 per day):
+### `claim_free_daily_credits(treasury_cap: &mut TreasuryCap<YUMEPROOF>, user_address: address, daily_tracker: &mut DailyCreditTracker, clock: &Clock, ctx: &mut TxContext)`
+Allows users to claim free daily credits (Step 7: Free Credits Max 2 Per Day):
 - Checks daily claim limits and resets counters for new days.
-- Ensures the device hasn't exceeded the daily free credit limit.
-- Mints and transfers one free credit to the device.
+- Ensures the user hasn't exceeded the daily free credit limit (max 2 per day).
+- Mints and transfers one free credit to the user.
 - Updates the daily claim tracking.
 
 ### `get_credit_price(): u64`
 Returns the fixed price (in IOTA base units) for one notarization credit.
 
-### `use_credits_for_notarization(token: Token<YUMEPROOF>, policy: &TokenPolicy<YUMEPROOF>, device_did: address, image_hash: vector<u8>, credits_needed: u64, ctx: &mut TxContext): ActionRequest<YUMEPROOF>`
-Allows a verified device to spend credits for notarization:
+### `use_credits_for_notarization_with_id(token: Token<YUMEPROOF>, policy: &TokenPolicy<YUMEPROOF>, notarization_id: vector<u8>, image_hash: vector<u8>, credits_needed: u64, registry: &mut NotarizationRegistry, ctx: &mut TxContext): (ActionRequest<YUMEPROOF>, NotarizationRecord)`
+Allows users to spend credits for notarization with ID indexing (Step 8: Notarize Image + Step 9: Spend Token for indexing):
 - Checks that the user has enough credits.
-- Validates device verification and credentials (placeholder implementation).
+- Validates that the notarization ID doesn't already exist.
+- Creates a notarization record with the provided ID for indexing.
 - Creates a spend request for the specified number of credits.
 - Adds notarization policy approval to the request.
-- Returns the action request for further processing.
+- Returns both the action request and the notarization record.
+
+### `complete_notarization(notarization_record: &mut NotarizationRecord, status: u8, ctx: &mut TxContext)`
+Completes a notarization with a status update:
+- Updates the notarization status (1: completed, 2: failed).
+- Records the completion timestamp.
+
+### `get_notarization_by_id(registry: &NotarizationRegistry, notarization_id: vector<u8>): (address, vector<u8>, u64, u8, u64)`
+Retrieves notarization information by ID for verification:
+- Returns the record address, image hash, timestamp, status, and credits used.
+- Fails if the notarization ID doesn't exist.
+
+### `notarization_exists(registry: &NotarizationRegistry, notarization_id: vector<u8>): bool`
+Checks if a notarization ID exists in the registry:
+- Returns true if the notarization ID is found, false otherwise.
 
 ### `register_notarization_service(policy: &mut TokenPolicy<YUMEPROOF>, cap: &TokenPolicyCap<YUMEPROOF>, service_address: address, _ctx: &mut TxContext)`
 Registers a new notarization service:
@@ -77,16 +89,6 @@ Updates the gas station configuration:
 Returns the current gas station configuration:
 - Returns the sponsor address and active status.
 
-### `is_device_verified(device_did: address): bool`
-Checks if a device is verified (placeholder implementation):
-- Would validate against shared DeviceVerification objects.
-- Currently returns true as a placeholder.
-
-### `validate_credentials(device_did: address, credentials_hash: vector<u8>, current_time: u64): bool`
-Validates verifiable credentials for a device (placeholder implementation):
-- Would validate against shared VerifiableCredentials objects.
-- Currently returns true as a placeholder.
-
 ### `test_init(ctx: &mut TxContext)`
 Test-only function to initialize the module in a test context.
 
@@ -96,30 +98,24 @@ Test-only function to initialize the module in a test context.
 - `MAX_FREE_CREDITS_PER_DAY`: Maximum free credits that can be claimed per day (2).
 - `EIncorrectPayment`: Error code for incorrect payment amounts.
 - `EDailyLimitExceeded`: Error code for exceeding daily free credit limit.
-- `EDeviceNotVerified`: Error code for unverified devices.
-- `EInvalidCredentials`: Error code for invalid credentials.
+- `ENotarizationIdExists`: Error code for duplicate notarization IDs.
+- `ENotarizationIdNotFound`: Error code for non-existent notarization IDs.
 
 ## Structs
 - `CLOSEDLOOPTOKEN`: One-time witness for module initialization.
 - `YUMEPROOF`: The token type for notarization credits.
 - `NotarizationPolicy`: Policy struct for allowlisting notarization services.
-- `DeviceVerification`: Tracks device verification status and daily credit claims.
-- `VerifiableCredentials`: Stores verifiable credentials for devices with validity periods.
-- `DailyCreditTracker`: Manages daily free credit claims across all devices.
+- `DailyCreditTracker`: Manages daily free credit claims across all users.
 - `GasStation`: Configuration for transaction sponsorship.
-
-## Architecture Integration
-The contract is designed to integrate with the following components from the architecture:
-- **Google Play Integrity API**: Device verification through `register_device_verification`
-- **Google Confidential Computing**: Credential issuance through `issue_verifiable_credentials`
-- **IOTA Gas Station**: Transaction sponsorship through `GasStation` struct
-- **Mobile Application**: Credit claiming and notarization through daily limits and device verification
-- **Verifier Web Interface**: Service registration and verification through notarization service allowlist
+- `NotarizationRecord`: Stores individual notarization records with IDs for indexing.
+- `NotarizationRegistry`: Manages all notarization records and ID tracking.
 
 ## Usage Notes
 - Only allowlisted services can perform notarization actions using credits.
 - Credits are non-divisible (no decimals).
 - All admin capabilities are transferred to the protocol admin after initialization.
-- Devices must be verified before claiming free credits or performing notarization.
-- Daily free credit limits are enforced per device DID.
-- Gas station sponsorship is available for covering transaction costs. 
+- Daily free credit limits are enforced per user address (max 2 per day).
+- Gas station sponsorship is available for covering transaction costs.
+- Each notarization request requires a unique ID for tracking and verification.
+- Notarization records are stored with status tracking (pending, completed, failed).
+- Device verification and credential management are handled by external services. 

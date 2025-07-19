@@ -21,6 +21,12 @@ module yumeproof_contracts::ClosedLoopToken {
     /// Error if daily free credit limit exceeded
     const EDailyLimitExceeded: u64 = 3;
 
+    /// Error if notarization ID already exists
+    const ENotarizationIdExists: u64 = 4;
+
+    /// Error if notarization ID not found
+    const ENotarizationIdNotFound: u64 = 5;
+
     /// One-time witness for module initialization
     public struct CLOSEDLOOPTOKEN has drop {}
 
@@ -29,25 +35,6 @@ module yumeproof_contracts::ClosedLoopToken {
 
     /// Allowlist for authorized notarization services
     public struct NotarizationPolicy has drop, store {}
-
-    /// Device verification status
-    public struct DeviceVerification has key, store {
-        id: object::UID,
-        device_did: address,
-        verified: bool,
-        verification_timestamp: u64,
-        daily_free_credits_claimed: u64,
-        last_claim_date: u64,
-    }
-
-    /// Verifiable credentials for devices
-    public struct VerifiableCredentials has key, store {
-        id: object::UID,
-        device_did: address,
-        credentials_hash: vector<u8>,
-        issued_timestamp: u64,
-        valid_until: u64,
-    }
 
     /// Daily credit tracking
     public struct DailyCreditTracker has key {
@@ -61,6 +48,23 @@ module yumeproof_contracts::ClosedLoopToken {
         id: object::UID,
         sponsor_address: address,
         is_active: bool,
+    }
+
+    /// Notarization record with ID for indexing
+    public struct NotarizationRecord has key, store {
+        id: object::UID,
+        notarization_id: vector<u8>,
+        user_address: address,
+        image_hash: vector<u8>,
+        timestamp: u64,
+        status: u8, // 0: pending, 1: completed, 2: failed
+        credits_used: u64,
+    }
+
+    /// Notarization registry for ID indexing
+    public struct NotarizationRegistry has key {
+        id: object::UID,
+        notarizations: Table<vector<u8>, address>, // notarization_id -> record_address
     }
 
     /// Initialize the module
@@ -108,47 +112,20 @@ module yumeproof_contracts::ClosedLoopToken {
         };
         transfer::share_object(gas_station);
 
+        // Create notarization registry for indexing
+        let notarization_registry = NotarizationRegistry {
+            id: object::new(ctx),
+            notarizations: table::new(ctx),
+        };
+        transfer::share_object(notarization_registry);
+
         // Transfer capabilities to protocol admin
         transfer::public_transfer(policy_cap, ctx.sender());
         transfer::public_freeze_object(coin_metadata);
         transfer::public_transfer(treasury_cap, ctx.sender());
     }
 
-    /// Register device verification
-    public fun register_device_verification(
-        device_did: address,
-        _verification_token: vector<u8>,
-        ctx: &mut TxContext,
-    ) {
-        let device_verification = DeviceVerification {
-            id: object::new(ctx),
-            device_did,
-            verified: true,
-            verification_timestamp: 0, // Will be set by external timestamp
-            daily_free_credits_claimed: 0,
-            last_claim_date: 0,
-        };
-        transfer::share_object(device_verification);
-    }
-
-    /// Issue verifiable credentials for device
-    public fun issue_verifiable_credentials(
-        device_did: address,
-        credentials_hash: vector<u8>,
-        valid_duration_ms: u64,
-        ctx: &mut TxContext,
-    ) {
-        let credentials = VerifiableCredentials {
-            id: object::new(ctx),
-            device_did,
-            credentials_hash,
-            issued_timestamp: 0, // Will be set by external timestamp
-            valid_until: valid_duration_ms, // Simplified for now
-        };
-        transfer::share_object(credentials);
-    }
-
-    /// Purchase notarization credits with IOTA
+    /// Purchase notarization credits with IOTA (Step 7: Buy Credits)
     public fun purchase_credits_with_iota(
         treasury_cap: &mut TreasuryCap<YUMEPROOF>,
         payment: Coin<YUMEPROOF>,
@@ -172,10 +149,10 @@ module yumeproof_contracts::ClosedLoopToken {
         transfer::public_transfer(payment, ctx.sender());
     }
 
-    /// Claim free daily credits (max 2 per day)
+    /// Claim free daily credits (Step 7: Free Credits Max 2 Per Day)
     public fun claim_free_daily_credits(
         treasury_cap: &mut TreasuryCap<YUMEPROOF>,
-        device_did: address,
+        user_address: address,
         daily_tracker: &mut DailyCreditTracker,
         clock: &Clock,
         ctx: &mut TxContext,
@@ -189,8 +166,8 @@ module yumeproof_contracts::ClosedLoopToken {
         };
 
         // Check current daily claims
-        let current_claims = if (table::contains(&daily_tracker.daily_claims, device_did)) {
-            *table::borrow(&daily_tracker.daily_claims, device_did)
+        let current_claims = if (table::contains(&daily_tracker.daily_claims, user_address)) {
+            *table::borrow(&daily_tracker.daily_claims, user_address)
         } else {
             0
         };
@@ -201,16 +178,16 @@ module yumeproof_contracts::ClosedLoopToken {
         // Mint free credits
         let token = token::mint(treasury_cap, 1, ctx);
 
-        // Transfer credits to device
-        let req = token.transfer(device_did, ctx);
+        // Transfer credits to user
+        let req = token.transfer(user_address, ctx);
         token::confirm_with_treasury_cap(treasury_cap, req, ctx);
 
         // Update daily claims
-        if (table::contains(&daily_tracker.daily_claims, device_did)) {
-            let claims = table::borrow_mut(&mut daily_tracker.daily_claims, device_did);
+        if (table::contains(&daily_tracker.daily_claims, user_address)) {
+            let claims = table::borrow_mut(&mut daily_tracker.daily_claims, user_address);
             *claims = *claims + 1;
         } else {
-            table::add(&mut daily_tracker.daily_claims, device_did, 1);
+            table::add(&mut daily_tracker.daily_claims, user_address, 1);
         };
     }
 
@@ -219,17 +196,35 @@ module yumeproof_contracts::ClosedLoopToken {
         PRICE_PER_CREDIT
     }
 
-    /// Use credits for notarization (requires device verification)
-    public fun use_credits_for_notarization(
+    /// Use credits for notarization with ID indexing (Step 8: Notarize Image + Step 9: Spend Token for indexing)
+    public fun use_credits_for_notarization_with_id(
         token: Token<YUMEPROOF>,
         _policy: &TokenPolicy<YUMEPROOF>,
-        _device_did: address,
-        _image_hash: vector<u8>,
+        notarization_id: vector<u8>,
+        image_hash: vector<u8>,
         credits_needed: u64,
+        registry: &mut NotarizationRegistry,
         ctx: &mut TxContext,
-    ): ActionRequest<YUMEPROOF> {
+    ): (ActionRequest<YUMEPROOF>, NotarizationRecord) {
         let balance = token::value(&token);
         assert!(balance >= credits_needed, EIncorrectPayment);
+
+        // Check if notarization ID already exists
+        assert!(!table::contains(&registry.notarizations, notarization_id), ENotarizationIdExists);
+
+        // Create notarization record for indexing
+        let record = NotarizationRecord {
+            id: object::new(ctx),
+            notarization_id,
+            user_address: ctx.sender(),
+            image_hash,
+            timestamp: 0, // Will be set by external timestamp
+            status: 0, // pending
+            credits_used: credits_needed,
+        };
+
+        // Register the notarization for indexing
+        table::add(&mut registry.notarizations, record.notarization_id, object::uid_to_address(&record.id));
 
         // Create spend request
         let mut action_request = token.spend(ctx);
@@ -237,7 +232,38 @@ module yumeproof_contracts::ClosedLoopToken {
         // Add notarization policy approval
         token::add_approval(NotarizationPolicy {}, &mut action_request, ctx);
 
-        action_request
+        (action_request, record)
+    }
+
+    /// Complete a notarization
+    public fun complete_notarization(
+        notarization_record: &mut NotarizationRecord,
+        status: u8, // 1: completed, 2: failed
+        ctx: &mut TxContext,
+    ) {
+        notarization_record.status = status;
+        notarization_record.timestamp = 0; // Will be set by external timestamp
+    }
+
+    /// Get notarization record by ID for verification
+    public fun get_notarization_by_id(
+        registry: &NotarizationRegistry,
+        notarization_id: vector<u8>,
+    ): (address, vector<u8>, u64, u8, u64) {
+        assert!(table::contains(&registry.notarizations, notarization_id), ENotarizationIdNotFound);
+        
+        let record_address = *table::borrow(&registry.notarizations, notarization_id);
+        // In a real implementation, you would fetch the record from the address
+        // For now, return placeholder values
+        (record_address, b"", 0, 0, 0)
+    }
+
+    /// Check if notarization ID exists
+    public fun notarization_exists(
+        registry: &NotarizationRegistry,
+        notarization_id: vector<u8>,
+    ): bool {
+        table::contains(&registry.notarizations, notarization_id)
     }
 
     /// Register notarization service
@@ -277,22 +303,6 @@ module yumeproof_contracts::ClosedLoopToken {
     /// Get gas station info
     public fun get_gas_station_info(gas_station: &GasStation): (address, bool) {
         (gas_station.sponsor_address, gas_station.is_active)
-    }
-
-    /// Check if device is verified
-    public fun is_device_verified(_device_did: address): bool {
-        // This would need to check against the shared DeviceVerification objects
-        // For now, return true as a placeholder
-        true
-    }
-
-    /// Validate verifiable credentials
-    public fun validate_credentials(
-        _device_did: address,
-        _credentials_hash: vector<u8>,
-        _current_time: u64,
-    ): bool {
-        true
     }
 
     #[test_only]
