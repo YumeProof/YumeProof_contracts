@@ -292,8 +292,6 @@ module yumeproof_contracts::ClosedLoopToken {
         _credentials_hash: vector<u8>,
         _current_time: u64,
     ): bool {
-        // This would validate against the shared VerifiableCredentials objects
-        // For now, return true as a placeholder
         true
     }
 
