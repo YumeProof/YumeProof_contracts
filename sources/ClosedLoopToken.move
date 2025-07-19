@@ -13,12 +13,15 @@ module yumeproof_contracts::ClosedLoopToken {
     
     /// Error if payment amount is incorrect
     const EIncorrectPayment: u64 = 2;
+    
+    /// Error if action is not authorized
+    const ENotAuthorized: u64 = 3;
 
     /// One-time witness for module initialization
     public struct CLOSEDLOOPTOKEN has drop {}
 
-    /// YumeProof Notarization Credits Token type
-    public struct YUMEPROOF has drop {}
+    /// YumeProof Notarization Credits Token type - only usable within YumeProof protocol
+    public struct YUMEPROOF has store {}
 
     /// Allowlist for authorized notarization services
     public struct NotarizationPolicy has drop, store {}
@@ -33,16 +36,26 @@ module yumeproof_contracts::ClosedLoopToken {
             b"Credits for notarizing images on YumeProof protocol", // description
             option::none(), // url
             ctx
-        );
+        ); 
+
+        
 
         // Create token policy
         let (mut policy, policy_cap) = token::new_policy(&treasury_cap, ctx);
         
-        // Add rules for spend actions
+        // Add rules for spend and transfer actions
         token::add_rule_for_action<CLOSEDLOOPTOKEN, NotarizationPolicy>(
             &mut policy,
             &policy_cap, 
             token::spend_action(), 
+            ctx
+        );
+        
+        // Prevent direct transfers between users
+        token::add_rule_for_action<CLOSEDLOOPTOKEN, NotarizationPolicy>(
+            &mut policy,
+            &policy_cap,
+            token::transfer_action(),
             ctx
         );
 
