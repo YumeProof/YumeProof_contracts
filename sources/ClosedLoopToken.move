@@ -1,11 +1,9 @@
 module yumeproof_contracts::ClosedLoopToken {
-    use std::option::{Self, Option};
     use iota::token::{Self, Token, TokenPolicy, TokenPolicyCap, ActionRequest};
     use iota::coin::{Self, TreasuryCap, Coin};
-    use iota::tx_context::{Self, TxContext};
+    use iota::tx_context;
+    use iota::bag;
     use iota::transfer;
-    use iota::balance::{Self, Balance};
-    use iota::bag::{Self, Bag};
 
     /// Credit package prices in IOTA
     const PRICE_PER_CREDIT: u64 = 1_000_000; // 1 IOTA = 1M base units
@@ -16,17 +14,17 @@ module yumeproof_contracts::ClosedLoopToken {
     /// Error if payment amount is incorrect
     const EIncorrectPayment: u64 = 2;
 
-    /// YumeProof Notarization Credits Token
-    struct YUMEPROOF has drop {}
+    /// One-time witness for module initialization
+    public struct CLOSEDLOOPTOKEN has drop {}
 
-    /// Error if action is not allowed
-    const ENotAuthorized: u64 = 0;
+    /// YumeProof Notarization Credits Token type
+    public struct YUMEPROOF has drop {}
 
     /// Allowlist for authorized notarization services
-    struct NotarizationPolicy has drop {}
+    public struct NotarizationPolicy has drop, store {}
 
     /// Initialize the module
-    fun init(otw: YUMEPROOF, ctx: &mut TxContext) {
+    fun init(otw: CLOSEDLOOPTOKEN, ctx: &mut TxContext) {
         let (treasury_cap, coin_metadata) = coin::create_currency(
             otw,
             0, // no decimals
@@ -37,11 +35,12 @@ module yumeproof_contracts::ClosedLoopToken {
             ctx
         );
 
-        // Create token policy for notarization service
+        // Create token policy
         let (mut policy, policy_cap) = token::new_policy(&treasury_cap, ctx);
         
-        // Add rules for spend actions (using credits)
-        policy.add_rule_for_action<YUMEPROOF, NotarizationPolicy>(
+        // Add rules for spend actions
+        token::add_rule_for_action<CLOSEDLOOPTOKEN, NotarizationPolicy>(
+            &mut policy,
             &policy_cap, 
             token::spend_action(), 
             ctx
@@ -62,7 +61,7 @@ module yumeproof_contracts::ClosedLoopToken {
     /// Purchase notarization credits with IOTA
     public fun purchase_credits_with_iota(
         treasury_cap: &mut TreasuryCap<YUMEPROOF>,
-        payment: Coin,
+        payment: Coin<YUMEPROOF>,
         ctx: &mut TxContext
     ) {
         // Calculate number of credits based on payment amount
@@ -76,7 +75,7 @@ module yumeproof_contracts::ClosedLoopToken {
         let token = token::mint(treasury_cap, credits, ctx);
         
         // Transfer credits to buyer
-        let req = token.transfer(tx_context::sender(ctx), ctx);
+        let req = token.transfer(ctx.sender(), ctx);
         token::confirm_with_treasury_cap(treasury_cap, req, ctx);
         
         // Transfer IOTA payment to treasury
@@ -92,10 +91,12 @@ module yumeproof_contracts::ClosedLoopToken {
     /// Use credits for notarization
     public fun use_credits(
         token: Token<YUMEPROOF>,
-        policy: &TokenPolicy<YUMEPROOF>,
+        _policy: &TokenPolicy<YUMEPROOF>,
         credits_needed: u64,
         ctx: &mut TxContext
     ): ActionRequest<YUMEPROOF> {
+        let balance = token::value(&token);
+        assert!(balance >= credits_needed, EIncorrectPayment);
         
         // Create spend request
         let mut action_request = token.spend(ctx);
@@ -111,9 +112,10 @@ module yumeproof_contracts::ClosedLoopToken {
         policy: &mut TokenPolicy<YUMEPROOF>,
         cap: &TokenPolicyCap<YUMEPROOF>,
         service_address: address,
-        ctx: &mut TxContext
+        _ctx: &mut TxContext
     ) {
-        let config = token::rule_config_mut<NotarizationPolicy, Bag>(policy, cap);
+        let rule = NotarizationPolicy {};
+        let config = token::rule_config_mut<YUMEPROOF, NotarizationPolicy, bag::Bag>(rule, policy, cap);
         bag::add(config, service_address, true);
     }
 
@@ -122,7 +124,8 @@ module yumeproof_contracts::ClosedLoopToken {
         policy: &TokenPolicy<YUMEPROOF>,
         address: address
     ): bool {
-        let config = token::rule_config<NotarizationPolicy, Bag>(policy);
+        let rule = NotarizationPolicy {};
+        let config = token::rule_config<YUMEPROOF, NotarizationPolicy, bag::Bag>(rule, policy);
         bag::contains(config, address)
     }
 }
