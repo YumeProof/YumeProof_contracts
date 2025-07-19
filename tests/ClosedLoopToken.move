@@ -1,136 +1,120 @@
 #[test_only]
-module yumeproof_contracts::ClosedLoopToken_tests {
-    use iota::test_utils::TestUtilsScenario;
-    use iota::tx_context::TxContext;
-    use iota::token::{Token, TokenPolicy};
-    use iota::coin::{TreasuryCap, Coin};
-    use std::assert;
-    use yumeproof_contracts::ClosedLoopToken::{
-        CLOSEDLOOPTOKEN, YUMEPROOF, NotarizationPolicy, get_credit_price, is_notarization_service
-    };
+module yumeproof_contracts::ClosedLoopToken_tests;
 
-    // Error code from contract
-    const EIncorrectPayment: u64 = 2;
+use iota::coin::{Self, TreasuryCap, Coin};
+use iota::test_utils::TestUtilsScenario;
+use iota::token::{Self, Token, TokenPolicy, TokenPolicyCap};
+use iota::tx_context::{Self, TxContext};
+use std::assert;
+use yumeproof_contracts::ClosedLoopToken::{
+    Self,
+    CLOSEDLOOPTOKEN,
+    YUMEPROOF,
+    NotarizationPolicy,
+    get_credit_price,
+    purchase_credits_with_iota,
+    use_credits,
+    is_notarization_service,
+    register_notarization_service
+};
 
-    // Actors
-    const ADMIN: address = @0xA;
-    const USER1: address = @0x1;
-    const SERVICE1: address = @0xS1;
-    const NON_SERVICE: address = @0xE1;
+// Error constant
+const EIncorrectPayment: u64 = 2;
 
-    #[test]
-    fun test_init() {
-        let scenario = TestUtilsScenario::begin(ADMIN);
-        let ctx = TestUtilsScenario::ctx(&mut scenario);
+// Test identities
+const ADMIN: address = @0xA1;
+const USER1: address = @0xB1;
+const SERVICE: address = @0xC1;
+const UNKNOWN: address = @0xD1;
 
-        // Initialize the contract
-        yumeproof_contracts::ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
+#[test]
+fun test_init() {
+    let scenario = TestUtilsScenario::begin(ADMIN);
+    let ctx = TestUtilsScenario::ctx(&mut scenario);
 
-        TestUtilsScenario::end(scenario);
-    }
+    ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
 
-    #[test]
-    fn test_purchase_credits_with_iota() {
-        let scenario = TestUtilsScenario::begin(ADMIN);
-        let ctx = TestUtilsScenario::ctx(&mut scenario);
-        yumeproof_contracts::ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
+    // If no panic, init successful
+    TestUtilsScenario::end(scenario);
+}
 
-        // Extract TreasuryCap and create payment
-        let treasury_cap = TestUtilsScenario::owned<TreasuryCap<YUMEPROOF>>(ctx, 0);
-        let payment = TestUtilsScenario::coin<YUMEPROOF>(get_credit_price(), ctx);
+#[test]
+fun test_purchase_and_use_credits() {
+    let scenario = TestUtilsScenario::begin(USER1);
+    let ctx = TestUtilsScenario::ctx(&mut scenario);
 
-        // Purchase credits
-        yumeproof_contracts::ClosedLoopToken::purchase_credits_with_iota(
-            &mut treasury_cap, payment, ctx
-        );
+    TestUtilsScenario::with_actor(ctx, ADMIN);
+    ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
+    TestUtilsScenario::with_actor(ctx, USER1);
 
-        // Token should now exist in sender's account
-        let _token = TestUtilsScenario::owned<Token<YUMEPROOF>>(ctx, 1);
+    let treasury_cap = TestUtilsScenario::owned<TreasuryCap<YUMEPROOF>>(ctx, 0);
+    let coin = TestUtilsScenario::coin<YUMEPROOF>(get_credit_price() * 3, ctx);
 
-        TestUtilsScenario::end(scenario);
-    }
+    purchase_credits_with_iota(&mut treasury_cap, coin, ctx);
 
-    #[test]
-    #[expected_failure(abort_code = EIncorrectPayment)]
-    fn test_purchase_too_little() {
-        let scenario = TestUtilsScenario::begin(ADMIN);
-        let ctx = TestUtilsScenario::ctx(&mut scenario);
-        yumeproof_contracts::ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
+    let token = TestUtilsScenario::owned<Token<YUMEPROOF>>(ctx, 1);
+    let policy = TestUtilsScenario::shared_ref<TokenPolicy<YUMEPROOF>>(ctx, 0);
 
-        let treasury_cap = TestUtilsScenario::owned<TreasuryCap<YUMEPROOF>>(ctx, 0);
-        let payment = TestUtilsScenario::coin<YUMEPROOF>(500_000, ctx); // half price
+    let _req = use_credits(token, policy, 2, ctx);
 
-        // Should abort due to insufficient value
-        yumeproof_contracts::ClosedLoopToken::purchase_credits_with_iota(
-            &mut treasury_cap, payment, ctx
-        );
+    TestUtilsScenario::end(scenario);
+}
 
-        TestUtilsScenario::end(scenario);
-    }
+#[test]
+#[expected_failure(abort_code = EIncorrectPayment)]
+fun test_purchase_too_little() {
+    let scenario = TestUtilsScenario::begin(USER1);
+    let ctx = TestUtilsScenario::ctx(&mut scenario);
 
-    #[test]
-    fn test_use_credits_success() {
-        let scenario = TestUtilsScenario::begin(ADMIN);
-        let ctx = TestUtilsScenario::ctx(&mut scenario);
-        yumeproof_contracts::ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
+    TestUtilsScenario::with_actor(ctx, ADMIN);
+    ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
+    TestUtilsScenario::with_actor(ctx, USER1);
 
-        let treasury_cap = TestUtilsScenario::owned<TreasuryCap<YUMEPROOF>>(ctx, 0);
-        let payment = TestUtilsScenario::coin<YUMEPROOF>(get_credit_price() * 5, ctx);
-        yumeproof_contracts::ClosedLoopToken::purchase_credits_with_iota(
-            &mut treasury_cap, payment, ctx
-        );
+    let treasury_cap = TestUtilsScenario::owned<TreasuryCap<YUMEPROOF>>(ctx, 0);
+    let too_small = TestUtilsScenario::coin<YUMEPROOF>(get_credit_price() / 2, ctx);
 
-        let token = TestUtilsScenario::owned<Token<YUMEPROOF>>(ctx, 1);
-        let policy = TestUtilsScenario::shared_ref<TokenPolicy<YUMEPROOF>>(ctx, 0);
+    purchase_credits_with_iota(&mut treasury_cap, too_small, ctx);
 
-        // Spend 3 credits
-        let _req = yumeproof_contracts::ClosedLoopToken::use_credits(
-            token, policy, 3, ctx
-        );
+    TestUtilsScenario::end(scenario);
+}
 
-        TestUtilsScenario::end(scenario);
-    }
+#[test]
+#[expected_failure(abort_code = EIncorrectPayment)]
+fun test_spend_too_much_credits() {
+    let scenario = TestUtilsScenario::begin(USER1);
+    let ctx = TestUtilsScenario::ctx(&mut scenario);
 
-    #[test]
-    #[expected_failure(abort_code = EIncorrectPayment)]
-    fn test_use_credits_fail() {
-        let scenario = TestUtilsScenario::begin(ADMIN);
-        let ctx = TestUtilsScenario::ctx(&mut scenario);
-        yumeproof_contracts::ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
+    TestUtilsScenario::with_actor(ctx, ADMIN);
+    ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
+    TestUtilsScenario::with_actor(ctx, USER1);
 
-        let treasury_cap = TestUtilsScenario::owned<TreasuryCap<YUMEPROOF>>(ctx, 0);
-        let payment = TestUtilsScenario::coin<YUMEPROOF>(get_credit_price() * 1, ctx);
-        yumeproof_contracts::ClosedLoopToken::purchase_credits_with_iota(
-            &mut treasury_cap, payment, ctx
-        );
+    let treasury_cap = TestUtilsScenario::owned<TreasuryCap<YUMEPROOF>>(ctx, 0);
+    let coin = TestUtilsScenario::coin<YUMEPROOF>(get_credit_price(), ctx);
 
-        let token = TestUtilsScenario::owned<Token<YUMEPROOF>>(ctx, 1);
-        let policy = TestUtilsScenario::shared_ref<TokenPolicy<YUMEPROOF>>(ctx, 0);
+    purchase_credits_with_iota(&mut treasury_cap, coin, ctx);
 
-        // Try to spend 5 credits with only 1 available
-        let _req = yumeproof_contracts::ClosedLoopToken::use_credits(
-            token, policy, 5, ctx
-        );
+    let token = TestUtilsScenario::owned<Token<YUMEPROOF>>(ctx, 1);
+    let policy = TestUtilsScenario::shared_ref<TokenPolicy<YUMEPROOF>>(ctx, 0);
 
-        TestUtilsScenario::end(scenario);
-    }
+    let _req = use_credits(token, policy, 5, ctx); // Too much
 
-    #[test]
-    fn test_register_and_check_service() {
-        let scenario = TestUtilsScenario::begin(ADMIN);
-        let ctx = TestUtilsScenario::ctx(&mut scenario);
-        yumeproof_contracts::ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
+    TestUtilsScenario::end(scenario);
+}
 
-        let cap = TestUtilsScenario::owned<TokenPolicyCap<YUMEPROOF>>(ctx, 0);
-        let policy = TestUtilsScenario::shared_ref<TokenPolicy<YUMEPROOF>>(ctx, 0);
+#[test]
+fun test_register_and_check_service() {
+    let scenario = TestUtilsScenario::begin(ADMIN);
+    let ctx = TestUtilsScenario::ctx(&mut scenario);
 
-        yumeproof_contracts::ClosedLoopToken::register_notarization_service(
-            policy, &cap, SERVICE1, ctx
-        );
+    ClosedLoopToken::init(CLOSEDLOOPTOKEN {}, ctx);
 
-        assert!(is_notarization_service(policy, SERVICE1), 101);
-        assert!(!is_notarization_service(policy, NON_SERVICE), 102);
+    let policy = TestUtilsScenario::shared_ref<TokenPolicy<YUMEPROOF>>(ctx, 0);
+    let cap = TestUtilsScenario::owned<TokenPolicyCap<YUMEPROOF>>(ctx, 0);
 
-        TestUtilsScenario::end(scenario);
-    }
+    register_notarization_service(policy, &cap, SERVICE, ctx);
+
+    assert!(is_notarization_service(policy, SERVICE), 100);
+    assert!(!is_notarization_service(policy, UNKNOWN), 101);
+
+    TestUtilsScenario::end(scenario);
 }
