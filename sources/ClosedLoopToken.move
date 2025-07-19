@@ -200,6 +200,13 @@ module yumeproof_contracts::ClosedLoopToken {
         PRICE_PER_CREDIT
     }
 
+    /// Get user's credit balance from their token
+    /// Note: In IOTA, the token object itself determines ownership.
+    /// The user must hold the token object in their wallet to use it.
+    public fun get_user_credits(token: &Token<YUMEPROOF>): u64 {
+        token::value(token)
+    }
+
     /// Use credits for notarization with ID indexing (Step 8: Notarize Image + Step 9: Spend Token for indexing) - Sponsored
     public fun use_credits_for_notarization_with_id(
         token: Token<YUMEPROOF>,

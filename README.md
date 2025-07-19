@@ -58,6 +58,12 @@ Allows users to claim free daily credits (Step 7: Free Credits Max 2 Per Day):
 ### `get_credit_price(): u64`
 Returns the fixed price (in IOTA base units) for one notarization credit.
 
+### `get_user_credits(token: &Token<YUMEPROOF>): u64`
+Returns the user's current credit balance:
+- Takes a token object as input.
+- Returns the number of credits the user currently holds.
+- Useful for checking balance before making purchases or notarizations.
+
 ### `use_credits_for_notarization_with_id(token: Token<YUMEPROOF>, policy: &TokenPolicy<YUMEPROOF>, notarization_id: vector<u8>, image_hash: vector<u8>, credits_needed: u64, registry: &mut NotarizationRegistry, ctx: &mut TxContext): (ActionRequest<YUMEPROOF>, NotarizationRecord)`
 Allows users to spend credits for notarization with ID indexing (Step 8: Notarize Image + Step 9: Spend Token for indexing):
 - Checks that the user has enough credits.
