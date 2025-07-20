@@ -126,9 +126,9 @@ module yumeproof_contracts::ClosedLoopToken {
     }
 
     /// Purchase notarization credits with IOTA (Step 7: Buy Credits) - Sponsored
-    public fun purchase_credits_with_iota(
+    public fun purchase_credits_with_iota<T>(
         treasury_cap: &mut TreasuryCap<YUMEPROOF>,
-        payment: Coin<YUMEPROOF>,
+        payment: Coin<T>,
         ctx: &mut TxContext,
     ) {
         // Calculate number of credits based on payment amount
@@ -145,7 +145,7 @@ module yumeproof_contracts::ClosedLoopToken {
         let req = token.transfer(ctx.sender(), ctx);
         token::confirm_with_treasury_cap(treasury_cap, req, ctx);
 
-        // Transfer IOTA payment to treasury
+        // Transfer payment to treasury
         transfer::public_transfer(payment, ctx.sender());
 
         // Gas station automatically sponsors this transaction

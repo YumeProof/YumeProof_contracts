@@ -39,12 +39,13 @@ Initializes the module:
 - Shares the policy as a shared object.
 - Transfers admin capabilities to the protocol admin (sender).
 
-### `purchase_credits_with_iota(treasury_cap: &mut TreasuryCap<YUMEPROOF>, payment: Coin<YUMEPROOF>, ctx: &mut TxContext)`
-Allows users to purchase notarization credits by paying IOTA (Step 7: Buy Credits):
+### `purchase_credits_with_iota<T>(treasury_cap: &mut TreasuryCap<YUMEPROOF>, payment: Coin<T>, ctx: &mut TxContext)`
+Allows users to purchase notarization credits by paying with IOTA or other coins (Step 7: Buy Credits):
+- Accepts any coin type as payment (typically IOTA coins).
 - Calculates the number of credits based on the payment amount and the fixed price per credit.
 - Ensures the minimum purchase amount is met.
-- Mints the corresponding number of credits.
-- Transfers credits to the buyer and the IOTA payment to the treasury.
+- Mints the corresponding number of YUMEPROOF credits.
+- Transfers credits to the buyer and the payment to the treasury.
 - **Gas station automatically sponsors the transaction fees at the network level.**
 
 ### `claim_free_daily_credits(treasury_cap: &mut TreasuryCap<YUMEPROOF>, user_address: address, daily_tracker: &mut DailyCreditTracker, clock: &Clock, ctx: &mut TxContext)`
