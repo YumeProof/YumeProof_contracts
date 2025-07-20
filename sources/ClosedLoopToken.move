@@ -9,9 +9,6 @@ module yumeproof_contracts::ClosedLoopToken {
     /// Credit package prices in IOTA
     const PRICE_PER_CREDIT: u64 = 1_000_000; // 1 IOTA = 1M base units
 
-    /// Minimum purchase amount
-    const MIN_PURCHASE: u64 = 1;
-
     /// Maximum free credits per day
     const MAX_FREE_CREDITS_PER_DAY: u64 = 2;
 
@@ -134,9 +131,6 @@ module yumeproof_contracts::ClosedLoopToken {
         // Calculate number of credits based on payment amount
         let payment_amount = coin::value(&payment);
         let credits = payment_amount / PRICE_PER_CREDIT;
-
-        // Ensure minimum purchase amount
-        assert!(credits >= MIN_PURCHASE, EIncorrectPayment);
 
         // Mint credits
         let token = token::mint(treasury_cap, credits, ctx);

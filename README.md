@@ -43,7 +43,6 @@ Initializes the module:
 Allows users to purchase notarization credits by paying with IOTA or other coins (Step 7: Buy Credits):
 - Accepts any coin type as payment (typically IOTA coins).
 - Calculates the number of credits based on the payment amount and the fixed price per credit.
-- Ensures the minimum purchase amount is met.
 - Mints the corresponding number of YUMEPROOF credits.
 - Transfers credits to the buyer and the payment to the treasury.
 - **Gas station automatically sponsors the transaction fees at the network level.**
@@ -124,7 +123,6 @@ Test-only function to initialize the module in a test context.
 
 ## Constants
 - `PRICE_PER_CREDIT`: The price of one credit in IOTA base units (1_000_000).
-- `MIN_PURCHASE`: The minimum number of credits that can be purchased in a single transaction.
 - `MAX_FREE_CREDITS_PER_DAY`: Maximum free credits that can be claimed per day (2).
 - `EIncorrectPayment`: Error code for incorrect payment amounts.
 - `EDailyLimitExceeded`: Error code for exceeding daily free credit limit.
