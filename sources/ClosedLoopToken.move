@@ -203,6 +203,7 @@ module yumeproof_contracts::ClosedLoopToken {
 
     /// Free mint function for testing - Mint YUMEPROOF tokens without payment
     /// This function allows free minting for testing and development
+    #[entry]
     public fun free_mint_yumeproof(
         treasury_cap: &mut TreasuryCap<YUMEPROOF>,
         ctx: &mut TxContext,
@@ -215,6 +216,7 @@ module yumeproof_contracts::ClosedLoopToken {
     }
 
     /// Use credits for notarization with ID indexing (Step 8: Notarize Image + Step 9: Spend Token for indexing) - Sponsored
+    #[entry]
     public fun use_credits_for_notarization_with_id(
         token: Token<YUMEPROOF>,
         _policy: &TokenPolicy<YUMEPROOF>,
