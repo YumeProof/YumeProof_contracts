@@ -205,7 +205,6 @@ module yumeproof_contracts::ClosedLoopToken {
     /// This function allows free minting for testing and development
     public fun free_mint_yumeproof(
         treasury_cap: &mut TreasuryCap<YUMEPROOF>,
-        amount: u64,
         ctx: &mut TxContext,
     ): Token<YUMEPROOF> {
         // Mint YUMEPROOF tokens for free (testing only)
