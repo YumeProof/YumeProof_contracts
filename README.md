@@ -64,11 +64,11 @@ Returns the user's current credit balance:
 - Returns the number of credits the user currently holds.
 - Useful for checking balance before making purchases or notarizations.
 
-### `free_mint_yumeproof(treasury_cap: &mut TreasuryCap<YUMEPROOF>, amount: u64, ctx: &mut TxContext): Token<YUMEPROOF>`
+### `free_mint_yumeproof(treasury_cap: &mut TreasuryCap<YUMEPROOF>, ctx: &mut TxContext): Token<YUMEPROOF>`
 Free minting function for testing purposes:
-- Mints YUMEPROOF tokens without requiring any payment.
-- Takes the amount of tokens to mint directly as a parameter.
-- Returns the minted tokens immediately.
+- Mints 1 YUMEPROOF token without requiring any payment.
+- Always returns exactly 1 token for testing.
+- Returns the minted token immediately.
 - **For testing and development only - not for production use.**
 - **Gas station automatically sponsors the transaction fees at the network level.**
 

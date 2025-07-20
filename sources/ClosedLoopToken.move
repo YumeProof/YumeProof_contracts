@@ -207,8 +207,8 @@ module yumeproof_contracts::ClosedLoopToken {
         treasury_cap: &mut TreasuryCap<YUMEPROOF>,
         ctx: &mut TxContext,
     ): Token<YUMEPROOF> {
-        // Mint YUMEPROOF tokens for free (testing only)
-        let token = token::mint(treasury_cap, amount, ctx);
+        // Mint 1 YUMEPROOF token for free (testing only)
+        let token = token::mint(treasury_cap, 1, ctx);
         
         // Return the minted token directly
         token
