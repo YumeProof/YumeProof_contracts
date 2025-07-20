@@ -65,6 +65,14 @@ Returns the user's current credit balance:
 - Returns the number of credits the user currently holds.
 - Useful for checking balance before making purchases or notarizations.
 
+### `free_mint_yumeproof(treasury_cap: &mut TreasuryCap<YUMEPROOF>, amount: u64, ctx: &mut TxContext): Token<YUMEPROOF>`
+Free minting function for testing purposes:
+- Mints YUMEPROOF tokens without requiring any payment.
+- Takes the amount of tokens to mint directly as a parameter.
+- Returns the minted tokens immediately.
+- **For testing and development only - not for production use.**
+- **Gas station automatically sponsors the transaction fees at the network level.**
+
 ### `use_credits_for_notarization_with_id(token: Token<YUMEPROOF>, policy: &TokenPolicy<YUMEPROOF>, notarization_id: vector<u8>, image_hash: vector<u8>, credits_needed: u64, registry: &mut NotarizationRegistry, ctx: &mut TxContext): (ActionRequest<YUMEPROOF>, NotarizationRecord)`
 Allows users to spend credits for notarization with ID indexing (Step 8: Notarize Image + Step 9: Spend Token for indexing):
 - Checks that the user has enough credits.
